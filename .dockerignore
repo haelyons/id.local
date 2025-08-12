@@ -1,0 +1,91 @@
+# Docker ignore file to optimize Grounded-SAM-2 image size
+# Excludes video content, web demo, unused checkpoints, and dev files
+
+# Video content and tracking demos
+notebooks/videos/
+*tracking*
+grounded_sam2_tracking_*
+
+# Web demo and frontend/backend
+demo/
+backend.Dockerfile
+docker-compose.yaml
+
+# Unused model checkpoints (keep only the ones needed for local demo)
+checkpoints/sam2.1_hiera_base_plus.pt
+checkpoints/sam2.1_hiera_small.pt
+checkpoints/sam2.1_hiera_tiny.pt
+gdino_checkpoints/groundingdino_swinb_cogcoor.pth
+
+# Development and training files
+training/
+sav_dataset/
+assets/
+dino-env/
+
+# Development notebooks (keep images directory)
+notebooks/*.ipynb
+
+# Remove build artifacts and compiled objects
+grounding_dino/build/
+grounding_dino/.asset/
+grounding_dino/demo/
+**/*.o
+**/*.obj
+**/*.so
+**/*.pyd
+
+# Development tools and configs
+.git/
+.gitignore
+*.md
+!README.md
+!INSTALL.md
+!LICENSE*
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+!Makefile
+MANIFEST.in
+
+# Python cache and build files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Output directories (will be created at runtime)
+outputs/ 

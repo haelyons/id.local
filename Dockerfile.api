@@ -1,0 +1,75 @@
+# Use the existing multistage build as base
+FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel AS builder
+
+ARG USE_CUDA=0
+ARG TORCH_ARCH="7.0;7.5;8.0;8.6"
+
+ENV AM_I_DOCKER=True
+ENV BUILD_WITH_CUDA="${USE_CUDA}"
+ENV TORCH_CUDA_ARCH_LIST="${TORCH_ARCH}"
+ENV CUDA_HOME=/usr/local/cuda-12.1/
+ENV PATH=/usr/local/cuda-12.1/bin:${PATH}
+ENV LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64:${LD_LIBRARY_PATH}
+
+# Install build dependencies
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    wget ffmpeg=7:* libsm6=2:* libxext6=2:* git=1:* nano vim=2:* \
+    ninja-build gcc-10 g++-10 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV CC=gcc-10
+ENV CXX=g++-10
+
+WORKDIR /workspace
+COPY . /workspace
+
+# Install Python dependencies and build packages
+RUN python -m pip install --upgrade pip "setuptools>=62.3.0,<75.9" wheel numpy \
+    opencv-python transformers supervision pycocotools addict yapf timm \
+    fastapi uvicorn[standard] python-multipart pillow aiohttp requests && \
+    python -m pip install -e . && \
+    python -m pip install --no-build-isolation -e grounding_dino
+
+# Clean up build artifacts
+RUN find . -name "*.o" -delete && \
+    find . -name "*.obj" -delete && \
+    find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true && \
+    rm -rf grounding_dino/build/ grounding_dino/.asset/ grounding_dino/demo/ /tmp/* /var/tmp/*
+
+# ---- Final Stage ----
+FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime
+
+ENV CUDA_HOME=/usr/local/cuda-12.1/
+ENV PATH=/usr/local/cuda-12.1/bin:${PATH}
+ENV LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64:${LD_LIBRARY_PATH}
+ENV AM_I_DOCKER=True
+
+# Install only runtime system dependencies
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    ffmpeg libsm6 libxext6 git && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy installed Python packages and code from builder
+COPY --from=builder /opt/conda /opt/conda
+COPY --from=builder /workspace /var/azureml-app
+
+# Install Azure ML inference server
+RUN python -m pip install azureml-inference-server-http
+
+# Copy scoring script to the standard Azure ML location
+COPY score.py /var/azureml-app/score.py
+
+# Set working directory to Azure ML standard
+WORKDIR /var/azureml-app
+
+# Expose port for inference server
+EXPOSE 5001
+
+# Set environment variables following Azure ML conventions
+ENV AML_APP_ROOT=/var/azureml-app
+ENV AZUREML_MODEL_DIR=/var/azureml-app
+
+# Start the inference server using the recommended azmlinfsrv command
+CMD ["azmlinfsrv", "--entry_script", "score.py", "--port", "5001"]
